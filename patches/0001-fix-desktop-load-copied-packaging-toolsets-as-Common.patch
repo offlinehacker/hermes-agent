@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jaka Hudoklin <jaka@x-truder.net>
+Date: Mon, 9 Nov 2026 05:59:14 +0100
+Subject: [PATCH] fix(desktop): load copied packaging toolsets as CommonJS
+
+run-electron-builder copies the prepared toolsets into the desktop build
+resources, inside apps/desktop's "type": "module" package. The icons
+toolset's icon-tool.js is CommonJS, so Node loaded it as ESM and every
+Linux AppImage packaging run failed converting the icon set with
+"require is not defined in ES module scope". Give each copy its own
+CommonJS package scope.
+---
+ apps/desktop/scripts/run-electron-builder.mjs | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/apps/desktop/scripts/run-electron-builder.mjs b/apps/desktop/scripts/run-electron-builder.mjs
+index ca780b8b18..ad09080761 100644
+--- a/apps/desktop/scripts/run-electron-builder.mjs
++++ b/apps/desktop/scripts/run-electron-builder.mjs
+@@ -80,6 +80,10 @@ function toolsetArguments(inputs) {
+     const destination = path.join(tools, name)
+     fs.rmSync(destination, { recursive: true, force: true })
+     fs.cpSync(directory, destination, { recursive: true, verbatimSymlinks: true })
++    // Toolset scripts (the icons toolset's icon-tool.js) are CommonJS, and the
++    // copy now sits inside this "type": "module" package: pin its own scope, or
++    // Node loads them as ESM and Linux icon conversion fails on `require`.
++    fs.writeFileSync(path.join(destination, 'package.json'), '{ "type": "commonjs" }\n')
+     // Upstream parses this as a literal path after slicing file:// (not URL decoding).
+     return `-c.toolsets.${name}.url=file://${destination}`
+   })
